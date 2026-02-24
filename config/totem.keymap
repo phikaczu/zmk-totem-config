@@ -1,165 +1,358 @@
-//
-//                                                        ▀▀▀▀▀     ▀▀▀▀▀          ▀▀█▀▀
-//                                                        ▄▀▀▀▄  ▄  ▄▀▀▀▄  ▄  ▄▀▀▀▄  █  ▄▀▀▀▄
-//                                                        █   █  █  █   █  █  █   █  █  █   █
-//                                                         ▀▀▀   █   ▀▀▀   █   ▀▀▀   ▀   ▀▀▀
-//                                                               █      ▄▄▄█▄▄▄    █   █  
-//                                                               ▀      █  █  █     █▄█
-//                                                             ▀▀▀▀▀    █  █  █      ▀
-//                                                                      ▀  ▀  ▀
-//
-// ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+/*
+ * TOTEM 38-key ZMK keymap — C++ / C# / Visual Studio optimized
+ *
+ * ─── BEFORE BUILDING ────────────────────────────────────────────────────────
+ * Add zmk-tri-state to your config/west.yml:
+ *
+ *   manifest:
+ *     remotes:
+ *       - name: zmkfirmware
+ *         url-base: https://github.com/zmkfirmware
+ *       - name: dhruvinsh
+ *         url-base: https://github.com/dhruvinsh
+ *     projects:
+ *       - name: zmk
+ *         remote: zmkfirmware
+ *         revision: main
+ *         import: app/west.yml
+ *       - name: zmk-tri-state
+ *         remote: dhruvinsh
+ *         revision: main
+ *     self:
+ *       path: config
+ *
+ * ─── KEY POSITION REFERENCE ─────────────────────────────────────────────────
+ *
+ *   (used by hold-trigger-key-positions and combo key-positions)
+ *
+ *    0   1   2   3   4       5   6   7   8   9     <- top row (10)
+ *   10  11  12  13  14  15  16  17  18  19         <- mid row inner (10)
+ *  20                                        31    <- outer mid pinkies
+ *       21  22  23  24  25  26  27  28  29  30     <- bot row (10)
+ *               32  33  34      35  36  37         <- thumbs (6)
+ *
+ *    Q   W   E   R   T       Y   U   I   O   P
+ *    A   S   D   F   G   H   J   K   L   ;
+ *  `                                         '
+ *        Z   X   C   V   B   N   M   ,   .   /
+ *              Tab Esc Bsp     Spc Ent Del
+ *
+ * ─── LAYERS ─────────────────────────────────────────────────────────────────
+ *   0 DEF  QWERTY + Home Row Mods + tap-dance on A and ;
+ *   1 SYM  Symbols (L) + numpad (R)          — hold left-inner thumb (Spc)
+ *   2 NAV  Window/tab mgmt (L) + arrows (R)  — hold right-inner thumb (Bsp)
+ *   3 FUN  F-keys (L) + modifiers (R)        — hold SYM thumb while NAV active
+ *                                               or hold NAV thumb while SYM active
+ *
+ * ─── HOME ROW MODS ──────────────────────────────────────────────────────────
+ *   Left:   A=Ctrl  S=Gui  D=Alt  F=Shift
+ *   Right:  J=Shift  K=Alt  L=Gui  ;=Ctrl
+ *
+ *   Timeless configuration (hold-trigger-on-release + require-prior-idle-ms):
+ *   modifier only fires when an opposite-hand key is released while held,
+ *   preventing misfires during fast same-hand rolls.
+ *
+ * ─── TAP-DANCE ───────────────────────────────────────────────────────────────
+ *   A : tap = A (Ctrl HRM)   double-tap = ->  (C++ member/ptr access, lambda)
+ *   ; : tap = ; (Ctrl HRM)   double-tap = ::  (C++ scope, C# namespaces)
+ *
+ *   Tap-dance tapping-term (200ms) < HRM tapping-term (280ms): ZMK resolves
+ *   tap-dance first, so hold on A still activates Ctrl correctly.
+ *
+ * ─── ALT+TAB SWAPPER (zmk-tri-state) ────────────────────────────────────────
+ *   Combo: Left+Right on NAV layer (positions 16+18, non-adjacent to avoid
+ *   accidental trigger during normal arrow navigation).
+ *
+ *   Behavior:
+ *     First combo press  — Alt ON + Tab  → opens Windows switcher
+ *     Same combo again   — Tab           → cycles forward (Alt stays held)
+ *     Left/Up/Right/Down — navigate switcher (ignored keys, Alt stays held)
+ *     Any other key      — Alt OFF, then that key fires normally
+ *
+ *   This means: Esc cancels, Enter confirms — no extra macros needed.
+ */
 
 #include <behaviors.dtsi>
-#include <dt-bindings/zmk/bt.h>
 #include <dt-bindings/zmk/keys.h>
+#include <dt-bindings/zmk/bt.h>
 #include <dt-bindings/zmk/outputs.h>
-#include <dt-bindings/zmk/pointing.h>
 
-#define BASE 0
-#define NAV  1
-#define SYM  2
-#define ADJ  3
+// ── Layer indices ─────────────────────────────────────────────────────────────
+#define DEF 0
+#define SYM 1
+#define NAV 2
+#define FUN 3
 
-&mt {
-    quick-tap-ms = <100>;
-    global-quick-tap;
-    flavor = "tap-preferred";
-    tapping-term-ms = <170>;
-};
+// ── Tune built-in behaviors ───────────────────────────────────────────────────
+// quick-tap-ms: tapping a layer-tap or mod-tap key twice quickly always sends
+// the tap, even if the second tap is held. Makes Bspc/Space repeatable.
+&lt { quick-tap-ms = <175>; };
+&mt { quick-tap-ms = <175>; };
 
 / {
+
+// ════════════════════════════════════════════════════════════════════════════════
+// MACROS
+// ════════════════════════════════════════════════════════════════════════════════
+    macros {
+
+        // ->  C++ pointer member access, lambda return type
+        m_arrow: m_arrow {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            wait-ms = <0>;
+            tap-ms  = <10>;
+            bindings = <&kp MINUS &kp GT>;
+        };
+
+        // ::  C++ scope resolution, C# fully-qualified names
+        m_scope: m_scope {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            wait-ms = <0>;
+            tap-ms  = <10>;
+            bindings = <&kp COLON &kp COLON>;
+        };
+
+        // ==  equality operator
+        m_eq: m_eq {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            wait-ms = <0>;
+            tap-ms  = <10>;
+            bindings = <&kp EQUAL &kp EQUAL>;
+        };
+
+        // !=  inequality operator
+        m_neq: m_neq {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            wait-ms = <0>;
+            tap-ms  = <10>;
+            bindings = <&kp EXCL &kp EQUAL>;
+        };
+    };
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// BEHAVIORS
+// ════════════════════════════════════════════════════════════════════════════════
+    behaviors {
+
+        // ── Home Row Mod — LEFT hand ──────────────────────────────────────────
+        // Modifier fires only when an opposite-hand (right-side) key is released
+        // while this key is held. Safe for fast left-hand rolls.
+        hml: hml {
+            compatible = "zmk,behavior-hold-tap";
+            #binding-cells = <2>;
+            flavor = "balanced";
+            tapping-term-ms = <280>;
+            quick-tap-ms = <175>;
+            require-prior-idle-ms = <150>;
+            bindings = <&kp>, <&kp>;
+            // Right side: top(5-9) mid(15-19) outer-R(31) bot(26-30) thumbs(35-37)
+            hold-trigger-key-positions = <5 6 7 8 9 15 16 17 18 19 31 26 27 28 29 30 35 36 37>;
+            hold-trigger-on-release;
+        };
+
+        // ── Home Row Mod — RIGHT hand ─────────────────────────────────────────
+        // Modifier fires only when an opposite-hand (left-side) key is released
+        // while this key is held. Safe for fast right-hand rolls.
+        hmr: hmr {
+            compatible = "zmk,behavior-hold-tap";
+            #binding-cells = <2>;
+            flavor = "balanced";
+            tapping-term-ms = <280>;
+            quick-tap-ms = <175>;
+            require-prior-idle-ms = <150>;
+            bindings = <&kp>, <&kp>;
+            // Left side: top(0-4) mid(10-14) outer-L(20) bot(21-25) thumbs(32-34)
+            hold-trigger-key-positions = <0 1 2 3 4 10 11 12 13 14 20 21 22 23 24 25 32 33 34>;
+            hold-trigger-on-release;
+        };
+
+        // ── Tap-dance A ───────────────────────────────────────────────────────
+        // Single tap → A  (hml: hold=Ctrl, tap=A)
+        // Double-tap → -> (m_arrow macro)
+        td_a: td_a {
+            compatible = "zmk,behavior-tap-dance";
+            #binding-cells = <0>;
+            tapping-term-ms = <200>;
+            bindings = <&hml LCTRL A>, <&m_arrow>;
+        };
+
+        // ── Tap-dance ; ───────────────────────────────────────────────────────
+        // Single tap → ;  (hmr: hold=Ctrl, tap=;)
+        // Double-tap → :: (m_scope macro)
+        td_semi: td_semi {
+            compatible = "zmk,behavior-tap-dance";
+            #binding-cells = <0>;
+            tapping-term-ms = <200>;
+            bindings = <&hmr LCTRL SEMI>, <&m_scope>;
+        };
+
+        // ── Alt+Tab swapper (zmk-tri-state) ──────────────────────────────────
+        // See header comment for full behavior description.
+        // ignored-key-positions: Left(16) Up(17) Right(18) Down(28)
+        swap: swap {
+            compatible = "zmk,behavior-tri-state";
+            #binding-cells = <0>;
+            bindings = <&kt LALT>, <&kp TAB>, <&kt LALT>;
+            ignored-key-positions = <16 17 18 28>;
+        };
+    };
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// COMBOS
+// ════════════════════════════════════════════════════════════════════════════════
     combos {
         compatible = "zmk,combos";
 
-        combo_esc {
-            timeout-ms = <50>;
-            key-positions = <0 1>;
-            bindings = <&kp ESC>;
-        };
+        // ── Brackets — top row, DEF layer ────────────────────────────────────
+        // Adjacent pairs well away from HRM keys — negligible false-trigger risk.
+        // Symmetric layout: opening brackets left (moving inward), closing right.
+        //   Q+W=[ W+E={ E+R=(       U+I=) I+O=} O+P=]
+        combo_lbkt { timeout-ms = <50>; key-positions = <0 1>; bindings = <&kp LBKT>; layers = <DEF>; };
+        combo_lbrc { timeout-ms = <50>; key-positions = <1 2>; bindings = <&kp LBRC>; layers = <DEF>; };
+        combo_lpar { timeout-ms = <50>; key-positions = <2 3>; bindings = <&kp LPAR>; layers = <DEF>; };
+        combo_rpar { timeout-ms = <50>; key-positions = <6 7>; bindings = <&kp RPAR>; layers = <DEF>; };
+        combo_rbrc { timeout-ms = <50>; key-positions = <7 8>; bindings = <&kp RBRC>; layers = <DEF>; };
+        combo_rbkt { timeout-ms = <50>; key-positions = <8 9>; bindings = <&kp RBKT>; layers = <DEF>; };
+
+        // ── Operator combos — bot row, DEF layer ─────────────────────────────
+        //   M+,  → ==   (most frequent multi-char operator in C++/C#)
+        //   ,+.  → !=
+        combo_eq  { timeout-ms = <50>; key-positions = <27 28>; bindings = <&m_eq>;  layers = <DEF>; };
+        combo_neq { timeout-ms = <50>; key-positions = <28 29>; bindings = <&m_neq>; layers = <DEF>; };
+
+        // ── Alt+Tab swapper — NAV layer ───────────────────────────────────────
+        // Left(16) + Right(18): non-adjacent, avoids accidental trigger.
+        combo_swap { timeout-ms = <50>; key-positions = <16 18>; bindings = <&swap>; layers = <NAV>; };
     };
 
-    macros {
-        gif: gif {
-            label = "giphy";
-            compatible = "zmk,behavior-macro";
-            #binding-cells = <0>;
-            bindings =
-                <&macro_press>,
-                <&kp LSHFT>,
-                <&macro_tap>,
-                <&kp N2>,
-                <&macro_release>,
-                <&kp LSHFT>,
-                <&macro_tap>,
-                <&kp G &kp I &kp F>;
-        };
-    };
 
+// ════════════════════════════════════════════════════════════════════════════════
+// KEYMAP  —  38 bindings per layer, in position order 0-37
+// ════════════════════════════════════════════════════════════════════════════════
     keymap {
         compatible = "zmk,keymap";
 
-        // ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
-
-        base_layer {
-            // ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-
-            label = "BASE";
-
-            // ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-            //             ┏━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓   ┏━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
-            //             ┃     Q     ┃     W     ┃     F     ┃     P     ┃     G     ┃   ┃     J     ┃     L     ┃     U     ┃     Y     ┃     ;     ┃
-            //             ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫
-            //             ┃     A     ┃     R     ┃     S     ┃     T     ┃     D     ┃   ┃     H     ┃     N     ┃     E     ┃     I     ┃     O     ┃
-            // ┏━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┓
-            // ┃           ┃     Z     ┃     X     ┃     C     ┃     V     ┃     B     ┃   ┃     K     ┃     M     ┃     ,     ┃     .     ┃     /     ┃           ┃
-            // ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛
-            //                                     ┃           ┃    TAB    ┃    SPC    ┃   ┃   ENTER   ┃   BSPC    ┃           ┃
-            //                                     ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛   ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛
-
+// ── DEF ──────────────────────────────────────────────────────────────────────
+        def_layer {
+            label = "DEF";
             bindings = <
-                  &kp Q       &kp W       &kp E         &kp R        &kp T            &kp Y        &kp U        &kp I          &kp O       &kp P
-                  &mt LGUI A  &mt LALT S  &mt LCTRL D   &mt LSHFT F  &kp G            &kp H        &mt RSHFT J  &mt RCTRL K    &mt RALT L  &mt RGUI SEMI
-&kp LEFT_CONTROL  &kp Z       &kp X       &kp C         &kp V        &kp B            &kp N        &kp M        &kp COMMA      &kp DOT     &kp SLASH       &kp APOS
-                                          &kp LEFT_GUI  &kp TAB      &lt NAV SPACE    &lt SYM RET  &kp BSPC     &kp LEFT_ALT
+// pos  0      1      2      3      4             5      6      7      8      9
+    &kp Q  &kp W  &kp E  &kp R  &kp T         &kp Y  &kp U  &kp I  &kp O  &kp P
+// pos 10     11     12     13     14    15    16     17     18     19
+    &td_a  &hml LGUI S  &hml LALT D  &hml LSHFT F  &kp G  &kp H  &hmr RSHFT J  &hmr RALT K  &hmr RGUI L  &td_semi
+// pos 20
+    &kp GRAVE
+// pos 21     22     23     24     25    26    27     28         29       30
+    &kp Z  &kp X  &kp C  &kp V  &kp B  &kp N  &kp M  &kp COMMA  &kp DOT  &kp FSLH
+// pos 31
+    &kp SQT
+// pos 32             33               34                 35              36               37
+    &mt LGUI TAB  &mt LCTRL ESC  &lt NAV BSPC       &lt SYM SPACE  &mt LSHFT RET  &mt LALT DEL
             >;
         };
 
-        // ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
-
-        nav_layer {
-            // ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-
-            label = "NAVI";
-
-            // ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-            //             ┏━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓   ┏━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
-            //             ┃           ┃           ┃     UP    ┃           ┃     {     ┃   ┃     }     ┃     7     ┃     8     ┃     9     ┃     +     ┃
-            //             ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫
-            //             ┃   SHIFT   ┃   LEFT    ┃    DOWN   ┃   RIGHT   ┃     [     ┃   ┃     ]     ┃     4     ┃     5     ┃     6     ┃     -     ┃
-            // ┏━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┓
-            // ┃           ┃           ┃   P UP    ┃  C LOCK   ┃  P DOWN   ┃     (     ┃   ┃     )     ┃     1     ┃     2     ┃     3     ┃     *     ┃           ┃
-            // ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛
-            //                                     ┃           ┃    TAB    ┃    SPC    ┃   ┃    DEL    ┃     0     ┃           ┃
-            //                                     ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛   ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛
-
-            bindings = <
-            &kp ESC    &bt BT_CLR  &kp UP    &kp EQUAL  &kp LBRC    &kp RBRC  &kp N7        &kp N8        &kp N9        &kp KP_PLUS
-            &kp LSHFT  &kp LEFT    &kp DOWN  &kp RIGHT  &kp LBKT    &kp RBKT  &kp NUMBER_4  &kp N5        &kp NUMBER_6  &kp KP_MINUS
-&caps_word  &kp DEL    &kp PG_UP   &kp CAPS  &kp PG_DN  &kp LPAR    &kp RPAR  &kp NUMBER_1  &kp NUMBER_2  &kp NUMBER_3  &kp KP_MULTIPLY  &trans
-                                   &trans    &trans     &trans      &mo ADJ   &kp KP_N0     &trans
-            >;
-        };
-
-        // ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
-
-        sim_layer {
-            // ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-
+// ── SYM ──────────────────────────────────────────────────────────────────────
+// Left — symbols. Right — numpad.
+// 0 on home row (most frequent digit in code indexing and comparisons).
+// FUN layer via holding pos 34 (NAV thumb) while SYM is active.
+        sym_layer {
             label = "SYM";
-
-            // ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-            //             ┏━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓   ┏━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
-            //             ┃     !     ┃     @     ┃     #     ┃     $     ┃     %     ┃   ┃     ˆ     ┃     &     ┃     Ü     ┃     '     ┃     "     ┃
-            //             ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫
-            //             ┃     Ä     ┃           ┃    SZ     ┃           ┃           ┃   ┃   MUTE    ┃   YEN     ┃   EURO    ┃  POUND    ┃     Ö     ┃
-            // ┏━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┓
-            // ┃           ┃  EMAIL1   ┃  EMAIL2   ┃           ┃           ┃           ┃   ┃   VOL-    ┃   VOL+    ┃   LAST    ┃   NEXT    ┃     \     ┃           ┃
-            // ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛
-            //                                     ┃           ┃    GIF    ┃    ADJ    ┃   ┃           ┃           ┃           ┃
-            //                                     ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛   ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛
-
             bindings = <
-        &kp EXCL     &kp AT       &kp HASH   &kp DLLR  &kp PRCNT    &kp CARET  &kp AMPS      &kp RA(U)             &kp SQT                &kp DQT
-        &kp RA(A)    &trans       &kp RA(S)  &trans    &trans       &kp MINUS  &kp EQUAL     &kp LEFT_PARENTHESIS  &kp RIGHT_PARENTHESIS  &kp RA(O)
-&trans  &kp RA(F18)  &kp RA(F19)  &trans     &trans    &trans       &kp GRAVE  &kp ASTERISK  &kp LEFT_BRACKET      &kp RIGHT_BRACKET      &kp BSLH   &trans
-                                  &trans     &gif      &mo ADJ      &trans     &kp C_PP      &trans
+// pos  0          1        2          3          4              5          6        7        8        9
+    &kp EXCL  &kp AT  &kp HASH  &kp DLLR  &kp PRCNT       &kp BSLH  &kp N7  &kp N8  &kp N9  &kp COMMA
+// pos 10         11           12           13           14    15      16       17       18       19
+    &kp PLUS  &kp EQUAL  &kp UNDER  &kp MINUS  &kp CARET  &kp N0  &kp N4  &kp N5  &kp N6  &kp DOT
+// pos 20
+    &none
+// pos 21   22     23     24          25          26         27       28       29          30
+    &none  &none  &none  &kp STAR  &kp AMPS   &kp SEMI  &kp N1  &kp N2  &kp N3  &kp FSLH
+// pos 31
+    &none
+// pos 32        33            34                  35       36            37
+    &kp RET  &kp SPACE  &lt FUN BSPC           &trans  &kp LSHFT  &kp LALT
             >;
         };
 
-        // ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
-
-        adjust_layer {
-            // ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-
-            label = "ADJ";
-
-            // ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-            //             ┏━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓   ┏━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
-            //             ┃   RESET   ┃ BT CLEAR  ┃  OUT TOG  ┃           ┃           ┃   ┃           ┃    F7     ┃    F8     ┃    F9     ┃    F12    ┃
-            //             ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫
-            //             ┃ BOOTLOAD  ┃ BT NEXT   ┃           ┃           ┃           ┃   ┃           ┃    F4     ┃    F5     ┃    F6     ┃    F11    ┃
-            // ┏━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┓
-            // ┃           ┃           ┃ BT PREV   ┃           ┃           ┃           ┃   ┃           ┃    F1     ┃    F2     ┃    F3     ┃    F10    ┃           ┃
-            // ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┫   ┣━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━╋━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛
-            //                                     ┃           ┃           ┃           ┃   ┃           ┃           ┃           ┃
-            //                                     ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛   ┗━━━━━━━━━━━┻━━━━━━━━━━━┻━━━━━━━━━━━┛
-
+// ── NAV ──────────────────────────────────────────────────────────────────────
+// Left — window/tab management. Right — arrow cluster + home/end/page.
+//
+// Left mid row carries plain modifier keys so VS shortcuts work by holding
+// a modifier here while tapping the action key on the right hand.
+// e.g. Ctrl+Right (next word): hold pos 10 (Ctrl) + tap Right (pos 18)
+//      Shift+Down (select line): hold pos 13 (Shift) + tap Down (pos 28)
+//
+// Window shortcuts:
+//   Tab←   = Ctrl+Shift+Tab   (prev editor tab)
+//   Tab→   = Ctrl+Tab         (next editor tab)
+//   Tab×   = Ctrl+W           (close tab — works VS Code; use Ctrl+F4 for VS)
+//   Win←   = Win+Left         (snap window left)
+//   Win→   = Win+Right        (snap window right)
+//   Win×   = Alt+F4           (close window)
+//
+// FUN layer: hold pos 35 (SYM thumb) while NAV is active.
+        nav_layer {
+            label = "NAV";
             bindings = <
-              &sys_reset    &trans        &out OUT_TOG  &trans        &trans            &trans  &kp F7  &kp F8  &kp F9  &kp F12
-              &bootloader   &trans        &trans        &trans        &trans            &trans  &kp F4  &kp F5  &kp F6  &kp F11
-&bt BT_SEL 0  &bt BT_SEL 1  &bt BT_SEL 2  &bt BT_SEL 3  &bt BT_SEL 4  &bt BT_CLR_ALL    &trans  &kp F1  &kp F2  &kp F3  &kp F10  &trans
-                                          &trans        &trans        &trans            &trans  &trans  &trans
+// pos  0     1                     2               3           4              5          6           7       8           9
+    &none  &kp LC(LS(TAB))  &kp LC(TAB)  &kp LC(W)  &none     &kp DEL  &kp HOME  &none  &kp PG_UP  &none
+// pos 10          11           12           13             14          15      16            17         18            19
+    &kp LCTRL  &kp LGUI  &kp LALT  &kp LSHFT  &kp TAB  &none   &kp LEFT  &kp UP  &kp RIGHT  &kp C_AL_CALC
+// pos 20
+    &none
+// pos 21    22               23               24            25         26         27         28          29           30
+    &none  &kp LG(LEFT)  &kp LG(RIGHT)  &kp LA(F4)  &none   &kp INS  &kp END  &kp DOWN  &kp PG_DN  &none
+// pos 31
+    &none
+// pos 32             33            34                 35             36            37
+    &mt LGUI TAB  &kp LCTRL  &trans                &lt FUN ESC  &kp LSHFT  &kp LALT
+            >;
+        };
+
+// ── FUN ──────────────────────────────────────────────────────────────────────
+// F-keys on left hand, plain modifier keys on right hand for F-key chords.
+//
+// F5/F10/F11 column (index finger, positions 3/13/24 = vertical column):
+//   F5  Start Debugging        F10  Step Over
+//   F11 Step Into              F4   above F5 on top row
+//   F9  Toggle Breakpoint      F12  Go to Definition (pinky reach, infrequent hold)
+//
+// Right-hand modifiers (plain kp, not HRM — both thumbs already occupied):
+//   Shift(16)  Alt(17)  Gui(18)  Ctrl(19)
+//   Example chords (left thumb holds FUN, right holds modifier, left finger taps F-key):
+//     Shift+F5  (Stop Debug)   → pos 16 + pos 3
+//     Ctrl+F5   (Run no debug) → pos 19 + pos 3
+//     Shift+F11 (Step Out)     → pos 16 + pos 24
+//     Alt+F4    (Close window) → pos 17 + pos 2
+//
+// Device keys:
+//   BT_SEL 0-4: select Bluetooth profile
+//   OUT_USB / OUT_BLE: force USB or BLE output
+//   BT_CLR: clear current BT profile pairing
+//   PAUSE_BREAK: break / pause execution (VS debugger)
+//   CAPS: Caps Lock on outer-R pinky (rarely needed)
+//
+// Thumbs: bootloader and sys_reset for firmware flashing.
+        fun_layer {
+            label = "FUN";
+            bindings = <
+// pos  0        1        2        3        4              5               6               7               8               9
+    &kp F2  &kp F3  &kp F4  &kp F5  &kp F6         &bt BT_SEL 0  &bt BT_SEL 1  &bt BT_SEL 2  &bt BT_SEL 3  &bt BT_SEL 4
+// pos 10       11       12        13      14       15          16          17          18           19
+    &kp F7  &kp F8  &kp F9  &kp F10  &none  &kp PSCRN  &kp LSHFT  &kp LALT  &kp LGUI  &kp LCTRL
+// pos 20
+    &none
+// pos 21      22     23        24        25              26            27         28                  29              30
+    &kp F1  &none  &none  &kp F11  &kp F12        &out OUT_USB  &out OUT_BLE  &none  &kp PAUSE_BREAK  &bt BT_CLR
+// pos 31
+    &kp CAPS
+// pos 32           33            34                35            36            37
+    &bootloader  &sys_reset  &trans            &trans  &sys_reset  &bootloader
             >;
         };
     };
