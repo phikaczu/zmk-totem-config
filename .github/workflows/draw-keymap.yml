@@ -1,0 +1,23 @@
+# https://github.com/caksoylar/keymap-drawer?tab=readme-ov-file#automated-drawing-workflow
+name: Draw ZMK keymap
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "config/*.keymap"
+      - "config/*.dtsi"
+      - "keymap_drawer.config.yaml"
+
+jobs:
+  draw:
+    uses: caksoylar/keymap-drawer/.github/workflows/draw-zmk.yml@main
+    permissions:
+      contents: write
+    with:
+      keymap_patterns: "config/*.keymap"
+      west_config_path: "config"
+      output_folder: "keymap-drawer"
+      commit_message: "[Draw] ${{ github.event.head_commit.message }}"
+      # parse_args: "totem: '-c 10'"
+      draw_args:  "totem: 'dark_mode: auto'"
